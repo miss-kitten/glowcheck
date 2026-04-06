@@ -109,35 +109,44 @@ function scoreGoals(products, selectedGoals) {
 
 // ── Shared components ──────────────────────────────────────────────────────
 
-function Sidebar({ active, onNav }) {
+function Sidebar({ active, onNav, isOpen, onClose }) {
+  function handleNav(id) {
+    onNav(id)
+    onClose()
+  }
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        <div className="logo-icon">✿</div>
-        <h1>GlowCheck</h1>
-      </div>
-      <nav className="nav-section">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            className={`nav-item ${active === item.id ? 'active' : ''}`}
-            onClick={() => onNav(item.id)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        <div className="user-chip">
-          <div className="avatar">K</div>
-          <div className="user-info">
-            <div className="user-name">Kitty</div>
-            <div className="user-role">Skincare enthusiast</div>
+    <>
+      {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-logo">
+          <div className="logo-icon">✿</div>
+          <h1>GlowCheck</h1>
+          <button className="sidebar-close" onClick={onClose} aria-label="Close menu">✕</button>
+        </div>
+        <nav className="nav-section">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${active === item.id ? 'active' : ''}`}
+              onClick={() => handleNav(item.id)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-chip">
+            <div className="avatar">K</div>
+            <div className="user-info">
+              <div className="user-name">Kitty</div>
+              <div className="user-role">Skincare enthusiast</div>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   )
 }
 
@@ -642,6 +651,7 @@ export default function App() {
   const [amRoutine, setAmRoutine] = useState(() => loadState('gc_am_routine', []))
   const [pmRoutine, setPmRoutine] = useState(() => loadState('gc_pm_routine', []))
   const [selectedGoals, setSelectedGoals] = useState(() => loadState('gc_goals', []))
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => { saveState('gc_products', products) }, [products])
   useEffect(() => { saveState('gc_am_routine', amRoutine) }, [amRoutine])
@@ -673,9 +683,17 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={activePage} onNav={setActivePage} />
+      <Sidebar
+        active={activePage}
+        onNav={setActivePage}
+        isOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
       <div className="main">
         <header className="topbar">
+          <button className="hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+            <span /><span /><span />
+          </button>
           <div className="topbar-title">
             <h2>{meta.title}</h2>
             <p>{meta.sub}</p>
