@@ -480,6 +480,49 @@
   padding: 8px 12px;
 }
 
+/* ── Search section ── */
+.search-section {
+  margin-bottom: 4px;
+}
+
+.search-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-base);
+  margin: 0 0 2px;
+}
+
+.search-section-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+/* ── "or add manually" divider ── */
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.form-divider-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Search ── */
 .search-group { position: relative; }
 
@@ -535,10 +578,40 @@
   overflow-y: auto;
 }
 
+.dropdown-hint {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .dropdown-status {
-  padding: 12px 14px;
+  padding: 10px 14px;
   font-size: 13px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.dropdown-no-results {
+  padding: 10px 14px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.dropdown-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
 }
 
 .dropdown-item {
@@ -688,6 +761,37 @@
 .ing-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* ── Sub-acid picker ── */
+.sub-acid-row {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #FDFAF7;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sub-acid-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.sub-acid-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ing-btn-sub {
+  font-size: 11px;
+  padding: 4px 10px;
 }
 
 /* ── Tag picker ── */

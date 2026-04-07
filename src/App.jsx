@@ -4,7 +4,28 @@ import GlowStackLogo from './GlowStackLogo.jsx'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const ACTIVES = ['AHA', 'BHA', 'Retinol', 'Vitamin C', 'Niacinamide', 'Benzoyl Peroxide', 'Peptides', 'SPF']
+// Primary category actives shown in the main picker
+const ACTIVES = ['AHA', 'BHA', 'Retinol', 'Vitamin C', 'Niacinamide', 'Benzoyl Peroxide', 'Peptides', 'SPF', 'Azelaic Acid']
+
+// Specific acids that live under a parent category
+const AHA_ACIDS = ['Glycolic Acid', 'Lactic Acid', 'Mandelic Acid', 'Tartaric Acid']
+const BHA_ACIDS = ['Salicylic Acid', 'Betaine Salicylate']
+
+// Maps a specific acid back to its parent category (used for conflict checking)
+const ACID_PARENT = {
+  'Glycolic Acid': 'AHA',
+  'Lactic Acid': 'AHA',
+  'Mandelic Acid': 'AHA',
+  'Tartaric Acid': 'AHA',
+  'Salicylic Acid': 'BHA',
+  'Betaine Salicylate': 'BHA',
+}
+
+// Returns a display label: "AHA · Glycolic Acid" or just "AHA"
+function ingredientLabel(ing) {
+  const parent = ACID_PARENT[ing]
+  return parent ? `${parent} · ${ing}` : ing
+}
 
 const CONFLICT_RULES = [
   { a: 'Retinol', b: 'AHA', message: 'Over-exfoliation risk', suggestion: 'Alternate nights' },
@@ -14,31 +35,69 @@ const CONFLICT_RULES = [
   { a: 'Vitamin C', b: 'BHA', message: 'pH conflict reduces efficacy', suggestion: '30 min gap or separate routines' },
   { a: 'Niacinamide', b: 'Vitamin C', message: 'May reduce efficacy', suggestion: 'Monitor skin response', advisory: true },
   { a: 'Benzoyl Peroxide', b: 'Retinol', message: 'Deactivates retinol', suggestion: 'Alternate nights' },
+  { a: 'Azelaic Acid', b: 'Benzoyl Peroxide', message: 'May cause dryness and irritation', suggestion: 'Use on alternate nights' },
 ]
 
 const GOAL_ACTIVES = {
   Hydration: ['Peptides', 'SPF'],
   'Anti-aging': ['Retinol', 'Peptides', 'Vitamin C', 'SPF'],
-  'Acne control': ['BHA', 'Niacinamide', 'Benzoyl Peroxide'],
-  Brightening: ['Vitamin C', 'AHA', 'Niacinamide'],
-  'Barrier repair': ['Peptides', 'Niacinamide'],
+  'Acne control': ['BHA', 'Niacinamide', 'Benzoyl Peroxide', 'Azelaic Acid'],
+  Brightening: ['Vitamin C', 'AHA', 'Niacinamide', 'Azelaic Acid'],
+  'Barrier repair': ['Peptides', 'Niacinamide', 'Azelaic Acid'],
 }
 
-// Patterns used to detect actives from raw ingredients text
+// Returns the "canonical" active for conflict/goal purposes.
+// Specific acids are resolved to their parent category.
+function canonicalActive(ing) {
+  return ACID_PARENT[ing] ?? ing
+}
+
+// Detection rules for specific sub-acids. Each match also implies the parent category.
+// Works against both comma-joined ingredient_list arrays and raw ingredient strings.
+const SPECIFIC_ACID_PATTERNS = {
+  'Glycolic Acid':      /glycolic acid/i,
+  'Lactic Acid':        /lactic acid/i,
+  'Mandelic Acid':      /mandelic acid/i,
+  'Tartaric Acid':      /tartaric acid/i,
+  'Salicylic Acid':     /salicylic acid/i,
+  'Betaine Salicylate': /betaine salicylate/i,
+}
+
+// Top-level active detection. Specific acids already handled above;
+// these patterns catch the category even when no specific acid is named.
 const ACTIVE_PATTERNS = {
-  AHA: /\b(glycolic acid|lactic acid|mandelic acid|tartaric acid|citric acid|alpha.?hydroxy)\b/i,
-  BHA: /\b(salicylic acid|beta.?hydroxy)\b/i,
-  Retinol: /\b(retinol|retinal|retinoic acid|retinaldehyde|retinyl palmitate|retinyl acetate|vitamin a)\b/i,
-  'Vitamin C': /\b(ascorbic acid|ascorbyl|vitamin c|sodium ascorbyl phosphate|magnesium ascorbyl)\b/i,
-  Niacinamide: /\b(niacinamide|nicotinamide)\b/i,
-  'Benzoyl Peroxide': /\b(benzoyl peroxide)\b/i,
-  Peptides: /\b(peptide|palmitoyl|tripeptide|hexapeptide|oligopeptide|acetyl tetrapeptide|matrixyl|argireline)\b/i,
-  SPF: /\b(avobenzone|octinoxate|octisalate|oxybenzone|zinc oxide|titanium dioxide|homosalate|octocrylene|bemotrizinol|bisoctrizole)\b/i,
+  AHA:               /glycolic acid|lactic acid|mandelic acid|tartaric acid|alpha.?hydroxy/i,
+  BHA:               /salicylic acid|betaine salicylate|beta.?hydroxy/i,
+  Retinol:           /retinol|retinyl|retinoic acid|retinaldehyde/i,
+  'Vitamin C':       /ascorbic acid|ascorbyl|vitamin c/i,
+  Niacinamide:       /niacinamide|nicotinamide/i,
+  'Benzoyl Peroxide':/benzoyl peroxide/i,
+  Peptides:          /peptide|palmitoyl|acetyl hexapeptide/i,
+  SPF:               /ethylhexyl methoxycinnamate|avobenzone|zinc oxide|titanium dioxide/i,
+  'Azelaic Acid':    /azelaic acid/i,
 }
 
 function detectActivesFromText(text) {
   if (!text) return []
-  return ACTIVES.filter((active) => ACTIVE_PATTERNS[active]?.test(text))
+  const detected = []
+
+  // Specific acids first — each one also implies its parent category
+  for (const [acid, pattern] of Object.entries(SPECIFIC_ACID_PATTERNS)) {
+    if (pattern.test(text)) {
+      const parent = ACID_PARENT[acid]
+      if (!detected.includes(parent)) detected.push(parent)
+      detected.push(acid)
+    }
+  }
+
+  // Remaining top-level actives not already covered by the specific-acid pass
+  for (const active of ACTIVES) {
+    if (!detected.includes(active) && ACTIVE_PATTERNS[active]?.test(text)) {
+      detected.push(active)
+    }
+  }
+
+  return detected
 }
 
 const ACTIVE_EXPLANATIONS = {
@@ -50,6 +109,7 @@ const ACTIVE_EXPLANATIONS = {
   'Benzoyl Peroxide': 'kills acne-causing bacteria',
   Peptides: 'support collagen production and improve hydration',
   SPF: 'protects against UV damage and premature aging',
+  'Azelaic Acid': 'reduces inflammation, brightens skin tone, and fights acne',
 }
 
 const NAV_ITEMS = [
@@ -161,14 +221,17 @@ function saveState(key, value) {
 }
 
 function checkConflicts(routineProducts) {
-  const ingredientSet = new Set()
-  const ingredientToProducts = {}
+  // Build a set of canonical actives (specific acids → parent category)
+  // and a map from canonical active → affected product ids
+  const canonicalSet = new Set()
+  const canonicalToProducts = {}
 
   routineProducts.forEach((p) => {
     p.ingredients.forEach((ing) => {
-      ingredientSet.add(ing)
-      if (!ingredientToProducts[ing]) ingredientToProducts[ing] = []
-      ingredientToProducts[ing].push(p.id)
+      const canon = canonicalActive(ing)
+      canonicalSet.add(canon)
+      if (!canonicalToProducts[canon]) canonicalToProducts[canon] = []
+      canonicalToProducts[canon].push(p.id)
     })
   })
 
@@ -176,13 +239,13 @@ function checkConflicts(routineProducts) {
   const seen = new Set()
 
   CONFLICT_RULES.forEach((rule) => {
-    if (ingredientSet.has(rule.a) && ingredientSet.has(rule.b)) {
+    if (canonicalSet.has(rule.a) && canonicalSet.has(rule.b)) {
       const key = [rule.a, rule.b].sort().join('+')
       if (!seen.has(key)) {
         seen.add(key)
         const affectedProductIds = new Set([
-          ...(ingredientToProducts[rule.a] || []),
-          ...(ingredientToProducts[rule.b] || []),
+          ...(canonicalToProducts[rule.a] || []),
+          ...(canonicalToProducts[rule.b] || []),
         ])
         conflicts.push({ ...rule, affectedProductIds: [...affectedProductIds] })
       }
@@ -356,7 +419,7 @@ function Dashboard({ products, amRoutine, pmRoutine, selectedGoals, onNav }) {
                   <span className="routine-name">{p.name}</span>
                   <div className="ingredient-tags">
                     {p.ingredients.map((ing) => (
-                      <span key={ing} className="ing-tag">{ing}</span>
+                      <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
                     ))}
                   </div>
                 </div>
@@ -380,7 +443,7 @@ function Dashboard({ products, amRoutine, pmRoutine, selectedGoals, onNav }) {
                   <span className="routine-name">{p.name}</span>
                   <div className="ingredient-tags">
                     {p.ingredients.map((ing) => (
-                      <span key={ing} className="ing-tag">{ing}</span>
+                      <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
                     ))}
                   </div>
                 </div>
@@ -400,9 +463,8 @@ function ProductsPage({ products, onAdd, onDelete }) {
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
-  const [manualMode, setManualMode] = useState(false)
 
-  // Form state
+  // Form state — always visible as the primary flow
   const [name, setName] = useState('')
   const [brand, setBrand] = useState('')
   const [selectedIngredients, setSelectedIngredients] = useState([])
@@ -428,7 +490,6 @@ function ProductsPage({ products, onAdd, onDelete }) {
     const val = e.target.value
     setQuery(val)
     setSearchError('')
-    setManualMode(false)
 
     clearTimeout(debounceRef.current)
 
@@ -439,31 +500,50 @@ function ProductsPage({ products, onAdd, onDelete }) {
       return
     }
 
-    setSearching(true)
     setShowDropdown(true)
 
-    debounceRef.current = setTimeout(() => {
+    if (val.trim().length < 3) {
+      if (abortRef.current) abortRef.current.abort()
+      setSearching(false)
+      setSearchResults([])
+      return
+    }
+
+    setSearching(true)
+
+    debounceRef.current = setTimeout(async () => {
       if (abortRef.current) abortRef.current.abort()
       const controller = new AbortController()
       abortRef.current = controller
 
-      fetch(
-        `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(val)}&json=1&page_size=8&fields=product_name,brands,ingredients_text`,
-        { signal: controller.signal }
-      )
-        .then((r) => r.json())
-        .then((data) => {
-          const products = (data.products || []).filter((p) => p.product_name)
-          setSearchResults(products)
-          setShowDropdown(true)
-          setSearching(false)
-        })
-        .catch((err) => {
-          if (err.name === 'AbortError') return
-          setSearchError('Search failed. You can add the product manually below.')
-          setSearching(false)
-          setShowDropdown(false)
-        })
+      const q = val.trim()
+      const enc = encodeURIComponent(q)
+      const signal = controller.signal
+      const url = `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${enc}&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,ingredients_text`
+
+      try {
+        const data = await fetch(url, { signal }).then((r) => r.json())
+        const results = (data.products || []).filter((p) => p.product_name)
+
+        // Sort: starts-with matches first, then contains, then rest
+        const ql = q.toLowerCase()
+        const rank = (p) => {
+          const n = (p.product_name || '').toLowerCase()
+          const b = (p.brands || '').toLowerCase()
+          if (n.startsWith(ql) || b.startsWith(ql)) return 0
+          if (n.includes(ql) || b.includes(ql)) return 1
+          return 2
+        }
+        results.sort((a, b) => rank(a) - rank(b))
+
+        setSearchResults(results)
+        setSearching(false)
+      } catch (err) {
+        if (err.name === 'AbortError') return
+        setSearchError('Search unavailable. Add your product manually above.')
+        setSearching(false)
+        setShowDropdown(false)
+      }
     }, 400)
   }
 
@@ -475,12 +555,6 @@ function ProductsPage({ products, onAdd, onDelete }) {
     setQuery('')
     setShowDropdown(false)
     setSearchResults([])
-    setManualMode(true)
-  }
-
-  function handleManualMode() {
-    setShowDropdown(false)
-    setManualMode(true)
   }
 
   function toggleIngredient(ing) {
@@ -498,18 +572,7 @@ function ProductsPage({ products, onAdd, onDelete }) {
     setBrand('')
     setSelectedIngredients([])
     setTag('am')
-    setManualMode(false)
     setQuery('')
-  }
-
-  function handleReset() {
-    setManualMode(false)
-    setName('')
-    setBrand('')
-    setSelectedIngredients([])
-    setFormError('')
-    setQuery('')
-    setSearchResults([])
   }
 
   return (
@@ -517,22 +580,20 @@ function ProductsPage({ products, onAdd, onDelete }) {
       <div className="card">
         <div className="card-header">
           <span className="card-title">Add Product</span>
-          {manualMode && (
-            <button className="card-action" onClick={handleReset}>← Back to search</button>
-          )}
         </div>
         <div className="card-body form-body">
 
-          {/* ── Search bar ── */}
-          {!manualMode && (
+          {/* ── Search — top of form, optional ── */}
+          <div className="search-section">
+            <p className="search-section-label">Search database</p>
+            <p className="search-section-note">Best for US and European brands</p>
             <div className="form-group search-group" ref={searchRef}>
-              <label htmlFor="product-search" className="form-label">Search Open Beauty Facts</label>
               <div className="search-input-wrap">
                 <span className="search-icon" aria-hidden="true">⌕</span>
                 <input
                   id="product-search"
                   className="form-input search-input"
-                  placeholder="Search by product name…"
+                  placeholder="Search to auto-fill name and ingredients…"
                   value={query}
                   onChange={handleQueryChange}
                   autoComplete="off"
@@ -540,6 +601,7 @@ function ProductsPage({ products, onAdd, onDelete }) {
                   aria-expanded={showDropdown}
                   aria-controls="search-dropdown"
                   role="combobox"
+                  aria-label="Search product database"
                 />
                 {searching && <span className="search-spinner" role="status" aria-label="Searching…" />}
               </div>
@@ -548,11 +610,19 @@ function ProductsPage({ products, onAdd, onDelete }) {
 
               {showDropdown && (
                 <div className="search-dropdown" id="search-dropdown" role="listbox">
-                  {searching && searchResults.length === 0 && (
-                    <div className="dropdown-status">Searching…</div>
+                  {query.trim().length < 3 && (
+                    <div className="dropdown-hint">Type at least 3 characters to search</div>
                   )}
-                  {!searching && searchResults.length === 0 && query.trim() && (
-                    <div className="dropdown-status">No results found.</div>
+                  {searching && query.trim().length >= 3 && (
+                    <div className="dropdown-status">
+                      <span className="dropdown-spinner" aria-hidden="true" />
+                      Searching…
+                    </div>
+                  )}
+                  {!searching && query.trim().length >= 3 && searchResults.length === 0 && (
+                    <p className="dropdown-no-results">
+                      No results found — the database works best for US and European brands. Try adding your product manually below.
+                    </p>
                   )}
                   {searchResults.map((r, i) => (
                     <button
@@ -565,92 +635,125 @@ function ProductsPage({ products, onAdd, onDelete }) {
                       {r.brands && <span className="dropdown-brand">{r.brands}</span>}
                     </button>
                   ))}
-                  <button className="dropdown-manual" onPointerDown={handleManualMode} type="button">
-                    Not finding your product? Add manually
-                  </button>
                 </div>
-              )}
-
-              {!showDropdown && !query && (
-                <button className="manual-link" onClick={handleManualMode} type="button">
-                  Prefer to add manually?
-                </button>
               )}
             </div>
-          )}
+          </div>
 
-          {/* ── Product form (shown after selecting a result or going manual) ── */}
-          {manualMode && (
-            <>
-              <div className="form-group">
-                <label htmlFor="product-name" className="form-label">Product Name</label>
-                <input
-                  id="product-name"
-                  className="form-input"
-                  placeholder="e.g. The Ordinary Retinol 1%"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+          {/* ── Divider ── */}
+          <div className="form-divider">
+            <span className="form-divider-label">or add manually</span>
+          </div>
+
+          {/* ── Manual entry fields ── */}
+          <div className="form-group">
+            <label htmlFor="product-name" className="form-label">Product Name</label>
+            <input
+              id="product-name"
+              className="form-input"
+              placeholder="e.g. The Ordinary Retinol 1%"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="product-brand" className="form-label">Brand <span className="form-label-opt">(optional)</span></label>
+            <input
+              id="product-brand"
+              className="form-input"
+              placeholder="e.g. The Ordinary"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" id="actives-label">Active Ingredients</label>
+            {selectedIngredients.length > 0 && (
+              <div className="detected-note">
+                Detected from search — review and adjust as needed.
               </div>
+            )}
+            <div className="ingredient-picker" aria-labelledby="actives-label" role="group">
+              {ACTIVES.map((ing) => (
+                <button
+                  key={ing}
+                  className={`ing-btn ${selectedIngredients.includes(ing) ? 'selected' : ''}`}
+                  onClick={() => toggleIngredient(ing)}
+                  type="button"
+                  aria-pressed={selectedIngredients.includes(ing)}
+                >
+                  {ing}
+                </button>
+              ))}
+            </div>
 
-              <div className="form-group">
-                <label htmlFor="product-brand" className="form-label">Brand <span className="form-label-opt">(optional)</span></label>
-                <input
-                  id="product-brand"
-                  className="form-input"
-                  placeholder="e.g. The Ordinary"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" id="actives-label">Active Ingredients</label>
-                {selectedIngredients.length > 0 && (
-                  <div className="detected-note">
-                    Detected from ingredients list — review and adjust as needed.
-                  </div>
-                )}
-                <div className="ingredient-picker" aria-labelledby="actives-label" role="group">
-                  {ACTIVES.map((ing) => (
+            {/* Sub-acid picker for AHA */}
+            {selectedIngredients.includes('AHA') && (
+              <div className="sub-acid-row" role="group" aria-label="AHA specific acid (optional)">
+                <span className="sub-acid-label">Specific AHA (optional)</span>
+                <div className="sub-acid-chips">
+                  {AHA_ACIDS.map((acid) => (
                     <button
-                      key={ing}
-                      className={`ing-btn ${selectedIngredients.includes(ing) ? 'selected' : ''}`}
-                      onClick={() => toggleIngredient(ing)}
+                      key={acid}
+                      className={`ing-btn ing-btn-sub ${selectedIngredients.includes(acid) ? 'selected' : ''}`}
+                      onClick={() => toggleIngredient(acid)}
                       type="button"
-                      aria-pressed={selectedIngredients.includes(ing)}
+                      aria-pressed={selectedIngredients.includes(acid)}
                     >
-                      {ing}
+                      {acid}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
 
-              <div className="form-group">
-                <label className="form-label" id="routine-tag-label">Use in Routine</label>
-                <div className="tag-picker" role="group" aria-labelledby="routine-tag-label">
-                  {['am', 'pm', 'both'].map((t) => (
+            {/* Sub-acid picker for BHA */}
+            {selectedIngredients.includes('BHA') && (
+              <div className="sub-acid-row" role="group" aria-label="BHA specific acid (optional)">
+                <span className="sub-acid-label">Specific BHA (optional)</span>
+                <div className="sub-acid-chips">
+                  {BHA_ACIDS.map((acid) => (
                     <button
-                      key={t}
-                      className={`tag-btn tag-btn-${t} ${tag === t ? 'selected' : ''}`}
-                      onClick={() => setTag(t)}
+                      key={acid}
+                      className={`ing-btn ing-btn-sub ${selectedIngredients.includes(acid) ? 'selected' : ''}`}
+                      onClick={() => toggleIngredient(acid)}
                       type="button"
-                      aria-pressed={tag === t}
+                      aria-pressed={selectedIngredients.includes(acid)}
                     >
-                      <span aria-hidden="true">{t === 'am' ? '☀' : t === 'pm' ? '☾' : '✦'}</span>
-                      {' '}{t === 'am' ? 'AM' : t === 'pm' ? 'PM' : 'Both'}
+                      {acid}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
+          </div>
 
-              {formError && <div className="form-error" role="alert">{formError}</div>}
+          <div className="form-group">
+            <label className="form-label" id="routine-tag-label">Use in Routine</label>
+            <div className="tag-picker" role="group" aria-labelledby="routine-tag-label">
+              {['am', 'pm', 'both'].map((t) => (
+                <button
+                  key={t}
+                  className={`tag-btn tag-btn-${t} ${tag === t ? 'selected' : ''}`}
+                  onClick={() => setTag(t)}
+                  type="button"
+                  aria-pressed={tag === t}
+                >
+                  <span aria-hidden="true">{t === 'am' ? '☀' : t === 'pm' ? '☾' : '✦'}</span>
+                  {' '}{t === 'am' ? 'AM' : t === 'pm' ? 'PM' : 'Both'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-              <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleAdd}>
-                + Add Product
-              </button>
-            </>
-          )}
+          {formError && <div className="form-error" role="alert">{formError}</div>}
+
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleAdd}>
+            + Add Product
+          </button>
+
         </div>
       </div>
 
@@ -672,7 +775,7 @@ function ProductsPage({ products, onAdd, onDelete }) {
                     <span className={`routine-tag tag-${p.tag}`}>{p.tag.toUpperCase()}</span>
                     <div className="ingredient-tags">
                       {p.ingredients.map((ing) => (
-                        <span key={ing} className="ing-tag">{ing}</span>
+                        <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
                       ))}
                     </div>
                   </div>
@@ -765,7 +868,7 @@ function RoutinePage({ products, amRoutine, pmRoutine, onUpdateRoutine }) {
                       </div>
                       <div className="ingredient-tags">
                         {p.ingredients.map((ing) => (
-                          <span key={ing} className="ing-tag">{ing}</span>
+                          <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
                         ))}
                       </div>
                     </div>
@@ -801,7 +904,7 @@ function RoutinePage({ products, amRoutine, pmRoutine, onUpdateRoutine }) {
                       <span className={`routine-tag tag-${p.tag}`}>{p.tag.toUpperCase()}</span>
                       <div className="ingredient-tags">
                         {p.ingredients.map((ing) => (
-                          <span key={ing} className="ing-tag">{ing}</span>
+                          <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
                         ))}
                       </div>
                     </div>
