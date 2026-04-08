@@ -565,7 +565,6 @@ function ProductsPage({ products, onAdd, onDelete }) {
 
   function handleAdd() {
     if (!name.trim()) { setFormError('Please enter a product name.'); return }
-    if (selectedIngredients.length === 0) { setFormError('Please select at least one active ingredient.'); return }
     setFormError('')
     onAdd({ name: name.trim(), brand: brand.trim(), ingredients: selectedIngredients, tag })
     setName('')
@@ -669,7 +668,7 @@ function ProductsPage({ products, onAdd, onDelete }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label" id="actives-label">Active Ingredients</label>
+            <label className="form-label" id="actives-label">Active Ingredients <span className="form-label-opt">(optional)</span></label>
             {selectedIngredients.length > 0 && (
               <div className="detected-note">
                 Detected from search — review and adjust as needed.
@@ -774,9 +773,12 @@ function ProductsPage({ products, onAdd, onDelete }) {
                   <div className="cabinet-meta">
                     <span className={`routine-tag tag-${p.tag}`}>{p.tag.toUpperCase()}</span>
                     <div className="ingredient-tags">
-                      {p.ingredients.map((ing) => (
-                        <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
-                      ))}
+                      {p.ingredients.length > 0
+                        ? p.ingredients.map((ing) => (
+                            <span key={ing} className="ing-tag">{ingredientLabel(ing)}</span>
+                          ))
+                        : <span className="no-actives-label">No actives</span>
+                      }
                     </div>
                   </div>
                 </div>
