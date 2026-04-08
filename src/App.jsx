@@ -77,7 +77,9 @@ const ACTIVE_PATTERNS = {
   'Azelaic Acid':    /azelaic acid/i,
 }
 
-function detectActivesFromText(text) {
+function detectActivesFromText(raw) {
+  // Accept string or array (e.g. from previous API formats)
+  const text = Array.isArray(raw) ? raw.join(', ') : (raw || '')
   if (!text) return []
   const detected = []
 
@@ -519,7 +521,7 @@ function ProductsPage({ products, onAdd, onDelete }) {
       const q = val.trim()
       const enc = encodeURIComponent(q)
       const signal = controller.signal
-      const url = `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${enc}&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,ingredients_text`
+      const url = `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${enc}&search_simple=1&action=process&json=1&page_size=20&fields=product_name,brands,ingredients_text,ingredients_text_en`
 
       try {
         const data = await fetch(url, { signal }).then((r) => r.json())
@@ -548,7 +550,9 @@ function ProductsPage({ products, onAdd, onDelete }) {
   }
 
   function handleSelectResult(result) {
-    const detected = detectActivesFromText(result.ingredients_text || '')
+    const ingredientText = result.ingredients_text || result.ingredients_text_en || ''
+    const searchText = [result.product_name || '', ingredientText].join(', ')
+    const detected = detectActivesFromText(searchText)
     setName(result.product_name || '')
     setBrand(result.brands || '')
     setSelectedIngredients(detected)
